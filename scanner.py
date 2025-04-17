@@ -12,7 +12,7 @@ import numpy as np
 import json
 from sarif_om import *
 from jschema_to_python.to_json import to_json
-# This is comment for test for our project Spring 2025
+# This is comment for test for our project Spring 2025 VisionSQA
 '''Global SarifLog Object definition and Rule definition for SLI-KUBE. Rule IDs are ordered by the sequence as it appears in the TOSEM paper'''
 
 sarif_log = SarifLog(version='2.1.0',schema_uri='https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json', runs =[])
