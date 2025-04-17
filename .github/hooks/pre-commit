@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# Pre-commit hook to run security analysis on Python files
+echo "Running security analysis on changed Python files..."
+
+# Get list of staged Python files
+FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$')
+
+if [ -z "$FILES" ]; then
+    echo "No Python files to analyze."
+    exit 0
+fi
+
+# Directory for reports
+mkdir -p security_reports
+
+# Install bandit if not already installed
+pip3 install bandit > /dev/null 2>&1
+
+# Run Bandit (a Python security linter) on changed files
+echo "Running bandit security analysis..."
+python3 -m bandit -r $FILES -f csv -o security_reports/security_weakness_report.csv
+
+# Add the report to git
+git add security_reports/security_weakness_report.csv
+
+echo "Security analysis completed. Report saved to security_reports/security_weakness_report.csv"
+exit 0
