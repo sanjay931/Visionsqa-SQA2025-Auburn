@@ -19,7 +19,7 @@ pip3 install bandit > /dev/null 2>&1
 
 # Run Bandit (a Python security linter) on changed files
 echo "Running bandit security analysis..."
-python3 -m bandit -r $FILES -f csv -o security_reports/security_weakness_report.csv
+/opt/homebrew/bin/bandit -r $FILES -f csv -o security_reports/security_weakness_report.csv
 
 # Add the report to git
 git add security_reports/security_weakness_report.csv
