@@ -1,22 +1,28 @@
-import sys
-import os
-import typer
-import pandas as pd
-from forensics import forensics_decorator
-import scanner
+'''
+Akond Rahman 
+Sep 21, 2022
+Source Code to Run Tool on All Kubernetes Manifests  
+'''
+import scanner 
+import pandas as pd 
 import constants
-
-@forensics_decorator
+# comment for test 1
 def getCountFromAnalysis(ls_):
-    list2ret = []
+    list2ret           = []
     for tup_ in ls_:
         within_sec_cnt = 0 
         dir_name       = tup_[0]
         script_name    = tup_[1]        
-        within_secret  = tup_[2]  
-        within_sec_cnt = len(within_secret[0]) + len(within_secret[1]) + len(within_secret[2])
-        templa_secret  = tup_[3]
-        taint_secret   = tup_[4]
+        within_secret  = tup_[2]  # a list of dicts: [unameDict, passwordDict, tokenDict]
+        within_sec_cnt = len(within_secret[0]) + len( within_secret[1]  ) + len( within_secret[2] )
+        '''
+        ### format: ('data', 'password', ([], ['MTIzNAo='], [])) => (<rootKey>, <key>, <data_list>) ... need the list of the last tuple
+        if isinstance( within_secret, tuple ):
+            within_sec_cnt = len( within_secret[-1][1] )
+            # print( script_name,  within_secret, within_sec_cnt, type(within_secret) ) 
+        '''
+        templa_secret  = tup_[3]       ### format: a list , we will not use this in dumping       
+        taint_secret   = tup_[4]       ###   format: a list 
         privilege_dic  = tup_[5]
         http_dict      = tup_[6]        
         secuContextDic = tup_[7]
@@ -36,44 +42,45 @@ def getCountFromAnalysis(ls_):
         k8s_flag       = tup_[21]
         helm_flag      = tup_[22]
 
-        list2ret.append((
-            dir_name, script_name, within_sec_cnt, len(taint_secret), len(privilege_dic), len(http_dict), 
-            len(secuContextDic), len(nSpaceDict), len(absentResoDict), len(rollUpdateDic), len(netPolicyDict), 
-            len(pidfDict), len(ipcDict), len(dockersockDic), len(hostNetDict), len(cap_sys_dic), len(host_alias_dic), 
-            len(allow_priv_dic), len(unconfined_dic), len(cap_module_dic), k8s_flag, helm_flag
-        ))
+        list2ret.append(  ( dir_name, script_name, within_sec_cnt, len(taint_secret), len(privilege_dic), len(http_dict), len(secuContextDic), len(nSpaceDict), len(absentResoDict), len(rollUpdateDic), len(netPolicyDict), len(pidfDict), len(ipcDict), len(dockersockDic), len(hostNetDict), len(cap_sys_dic), len(host_alias_dic), len(allow_priv_dic), len(unconfined_dic), len(cap_module_dic) , k8s_flag, helm_flag  )  )
     return list2ret
 
-@forensics_decorator
-def main():
-    # Use current directory as default
-    directory = "."
-    
-    # Get command line arguments if provided
-    if len(sys.argv) > 1:
-        directory = sys.argv[1]
-    
-    print(f"Processing directory: {directory}")
-    
-    # Validate the directory exists
-    if not os.path.exists(directory):
-        print(f"Error: Directory does not exist: {directory}")
-        return
-    
-    # Run the scanner
-    content_as_ls, sarif_json = scanner.runScanner(directory)
 
-    # Write the SARIF output to file
+def main(directory: Path = typer.Argument(..., exists=True, help="Absolute path to the folder than contains Kubernetes manifests"),
+         ):
+    """
+    Run KubeSec in a Kubernetes directory and get results in a CSV file.
+
+    """
+    content_as_ls, sarif_json   = scanner.runScanner( directory )
+    
     with open("SLIKUBE.sarif", "w") as f:
-        f.write(sarif_json)
+      f.write(sarif_json)
 
-    # Process and save results
-    df_all = pd.DataFrame(getCountFromAnalysis(content_as_ls))
-    
-    # Create output file in current directory (not in the scanned directory)
-    outfile = "slikube_results.csv"
-    df_all.to_csv(outfile, header=constants.CSV_HEADER, index=False, encoding=constants.CSV_ENCODING)
-    print(f"Results saved to {outfile}")
+    df_all          = pd.DataFrame( getCountFromAnalysis( content_as_ls ) )
+    outfile = Path(directory, "slikube_results.csv")
+
+    df_all.to_csv( outfile, header= constants.CSV_HEADER , index=False, encoding= constants.CSV_ENCODING )
+
 
 if __name__ == '__main__':
+
+    '''
+    DO NOT DELETE ALL IN K8S_REPOS AS TAINT TRACKING RELIES ON BASH SCRIPTS, ONE OF THE STRENGTHS OF THE TOOL 
+    '''
+    # ORG_DIR         = '/Users/arahman/K8S_REPOS/GITHUB_REPOS/'
+    # OUTPUT_FILE_CSV = '/Users/arahman/Documents/OneDriveWingUp/OneDrive-TennesseeTechUniversity/Research/Kubernetes/StaticTaint/data/V16_GITHUB_OUTPUT.csv'
+
+    # ORG_DIR         = '/Users/arahman/K8S_REPOS/GITLAB_REPOS/'
+    # OUTPUT_FILE_CSV = '/Users/arahman/Documents/OneDriveWingUp/OneDrive-TennesseeTechUniversity/Research/Kubernetes/StaticTaint/data/V16_GITLAB_OUTPUT.csv'
+
+
+    # ORG_DIR         = '/Users/arahman/K8S_REPOS/BRINTO_REPOS/'
+    # OUTPUT_FILE_CSV = '/Users/arahman/Documents/OneDriveWingUp/OneDrive-TennesseeTechUniversity/Research/Kubernetes/StaticTaint/data/V16_BRINTO_OUTPUT.csv'
+
+    # take sarif_json from scanner
     main()
+
+
+
+

@@ -3,7 +3,6 @@ Akond Rahman
 May 04, 2021 
 Construct taint graphs based on weakness types 
 '''
-from forensics import forensics_decorator
 import constants
 import parser 
 import os 
@@ -65,7 +64,7 @@ def getValidTaints(  lis_template_matches ):
     return taint_lis 
 
 
-@forensics_decorator
+
 def mineSecretGraph( path2script, yaml_dict , secret_dict ):
     '''
     This method looks at YAML files in Helm templates. 

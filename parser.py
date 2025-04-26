@@ -3,7 +3,6 @@ Akond Rahman
 April 30, 2021 
 Parser to file YAML files
 '''
-from forensics import forensics_decorator
 import sys
 import ruamel.yaml 
 from ruamel.yaml.scanner import ScannerError
@@ -157,7 +156,7 @@ def checkParseError( path_script ):
             flag = False
             print( constants.YAML_SKIPPING_TEXT  )
     return flag
-@forensics_decorator
+
 def loadMultiYAML( script_ ):
     dicts2ret = []  
     with open(script_, constants.FILE_READ_FLAG  ) as yml_content :
@@ -237,11 +236,11 @@ def find_json_path_keys(json_file, parent_path='', paths=None):
     """The following regular expressions are used to remove elements to construct a VALID json path"""
 
     # app.kubernetes.io/release --> "app.kubernetes.io/release"
-    regex_key_dot = re.compile("([^\\s\\.]+[.][\\S]+)")
+    regex_key_dot = re.compile("([^\s\.]+[.][\S]+)")
     # app.kubernetes.io/release --> "app*kubernetes*io*release"
     regex_special_character_removal = re.compile("[^A-Za-z0-9]+")
     #[3].metadata.name --> .metadata.name
-    regex_remove_initial_index = re.compile(r"^/?(\[)([0-9])+(\])")
+    regex_remove_initial_index = re.compile("^/?(\[)([0-9])+(\])")
     
     if paths is None:
         paths = []   
@@ -300,7 +299,7 @@ Useful in MultiYaml file format but redundant in single yaml Need to merge with 
 
 def update_json_paths (paths):
     #[3].metadata.name --> .metadata.name
-    regex_remove_initial_index = re.compile(r"^/?(\[)([0-9])+(\])")
+    regex_remove_initial_index = re.compile("^/?(\[)([0-9])+(\])")
     json_path =[]
     updated_paths =[]
     remove = ''    
@@ -312,61 +311,53 @@ def update_json_paths (paths):
     return json_path
     
 
-def show_line_for_paths(filepath, key):
+def show_line_for_paths(  filepath, key): #key_jsonpath_mapping is a global dictionary
     line_number = count_initial_comment_line(filepath)
+    """
+    input: provide  JSON_PATH dictionary and the key
+    output:  line of appearance of the key in the file
+    """
+    env_PATH = r"C:\ProgramData\Chocolatey\bin"
     lines = []
     adjusted_lines = []
-    print("This is the mapping for the Key", key, "--->", key_jsonpath_mapping.get(key, []))
-    
+    print("This is the mapping for the Key",key,"--->",key_jsonpath_mapping[key]) 
+    # for k in key_jsonpath_mapping:
+    #     print("Key--->",k, "Value--->",key_jsonpath_mapping[k])
     if key_jsonpath_mapping.get(key) is not None:
-        try:
-            if isinstance(key_jsonpath_mapping[key], list):
-                for i in key_jsonpath_mapping[key]:
-                    yq_parameter = i + " | key | line "
-                    try:
-                        result = subprocess.check_output(["yq", yq_parameter, filepath], universal_newlines=True)
-                        output = result.split("---")
-                        for line in output:
-                            line = line.replace("\n", "")
-                            if line.strip():  # Check if line is not empty
-                                try:
-                                    line_convert = int(line)
-                                    if line_convert > 0:
-                                        line_number = line_convert + count_initial_comment_line(filepath)
-                                        lines.append(line_number)
-                                except ValueError:
-                                    # Skip lines that can't be converted to int
-                                    pass
-                    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-                        print(f"Warning: yq command failed or not found. Using default line number 1: {e}")
-                        lines.append(1)  # Default to line 1 if yq fails
-            else:
-                yq_parameter = key_jsonpath_mapping[key] + " | key | line "
-                try:
-                    result = subprocess.check_output(["yq", yq_parameter, filepath], universal_newlines=True)
-                    output = result.split("---")
-                    for line in output:
-                        line = line.replace("\n", "")
-                        if line.strip():  # Check if line is not empty
-                            try:
-                                line_convert = int(line)
-                                if line_convert > 0:
-                                    line_number = line_convert + count_initial_comment_line(filepath)
-                                    lines.append(line_number)
-                            except ValueError:
-                                # Skip lines that can't be converted to int
-                                pass
-                except (subprocess.CalledProcessError, FileNotFoundError) as e:
-                    print(f"Warning: yq command failed or not found. Using default line number 1: {e}")
-                    lines.append(1)  # Default to line 1 if yq fails
-        except Exception as e:
-            print(f"Error in show_line_for_paths: {str(e)}")
-            lines.append(1)  # Default to line 1 if anything fails
-    
-    # If no lines were found, use line 1 as default
-    if not lines:
-        lines.append(1)
-    
+        if isinstance(key_jsonpath_mapping[key], list):
+            for i in key_jsonpath_mapping[key]:
+                #print(i)
+                yq_parameter = i + " | key | line "
+                #print(yq_parameter)
+                result = subprocess.check_output(["yq", yq_parameter , filepath], universal_newlines=True)
+                #result = subprocess.run(["C:/ProgramData/Chocolatey/bin/yq ",yq_parameter, filepath], shell = True, text= True, capture_output= True,cwd= env_PATH ) #env= {'PATH' : env_PATH}
+                #env= {'PATH': 'C:\ProgramData\Chocolatey\bin'}
+                #print(result)
+                output = result.split("---")
+                for line in output:
+                    line.replace("\n","")
+                    line_convert = int(line)
+                    print(type(line_convert))
+                    if(line_convert >0):
+                        line_number = line_convert + count_initial_comment_line(filepath)
+                        lines.append(line_number)
+                #print(lines)
+        else:
+            yq_parameter = key_jsonpath_mapping[key]+ " | key | line "
+            result = subprocess.check_output(["yq", yq_parameter , filepath], universal_newlines=True)
+                #result = subprocess.run(["C:/ProgramData/Chocolatey/bin/yq ",yq_parameter, filepath], shell = True, text= True, capture_output= True,cwd= env_PATH ) #env= {'PATH' : env_PATH}
+                #env= {'PATH': 'C:\ProgramData\Chocolatey\bin'}
+                
+            output = result.split("---")
+            for line in output:
+                line.replace("\n","")
+                line_convert = int(line)
+                #print(type(line_convert))
+                if(line_convert >0):
+                    line_number = line_convert + count_initial_comment_line(filepath)
+                    lines.append(line_number)
+                #print(lines)
+                   
     return lines
 
 
