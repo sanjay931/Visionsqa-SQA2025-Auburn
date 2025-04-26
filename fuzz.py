@@ -168,9 +168,9 @@ def main():
     # List the Python files and methods to fuzz
     # Based on repository files
     target_methods = [
-        {"file": "TEST_PARSING.py", "method": "parse_yaml"},
-        {"file": "TEST_SCANNING.py", "method": "scanForCredentials"},
-        {"file": "TEST_CONSTANTS.py", "method": "getYAMLFiles"},
+        {"file": "parser.py", "method": "getYAMLFiles"},
+        {"file": "scanner.py", "method": "scanForCredentials"},
+        {"file": "graphtaint.py", "method": "getDictGraph"},
         {"file": "main.py", "method": "load_manifest"},
         {"file": "TEST_INTEGRATION.py", "method": "kube_parser"}
     ]
