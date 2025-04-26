@@ -1,1 +1,2 @@
 filename,test_name,test_id,issue_severity,issue_confidence,issue_cwe,issue_text,line_number,col_offset,end_col_offset,line_range,more_info
+./test_security.py,start_process_with_a_shell,B605,HIGH,HIGH,https://cwe.mitre.org/data/definitions/78.html,"Starting a process with a shell, possible injection detected, security issue.",6,4,25,[6],https://bandit.readthedocs.io/en/1.8.3/plugins/b605_start_process_with_a_shell.html
