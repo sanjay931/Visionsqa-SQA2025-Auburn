@@ -1,6 +1,6 @@
 '''
-Akond Rahman Test
-May 03, 2021 
+Prof Akond Rahman
+May 03, 2021 /2025
 Code to detect security anti-patterns 
 '''
 import parser 
@@ -12,7 +12,8 @@ import numpy as np
 import json
 from sarif_om import *
 from jschema_to_python.to_json import to_json
-# This is comment for test for our project Spring 2025 VisionSQA
+import myLogger
+
 '''Global SarifLog Object definition and Rule definition for SLI-KUBE. Rule IDs are ordered by the sequence as it appears in the TOSEM paper'''
 
 sarif_log = SarifLog(version='2.1.0',schema_uri='https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json', runs =[])
@@ -161,8 +162,12 @@ def scanKeys(k_, val_lis):
 
 
 def scanForSecrets(yaml_d): 
+    logObj = myLogger.giveMeLoggingObject()
+    logObj.info(f"Sanning for secrets in: {yaml_d}")
+
     key_lis, dic2ret_secret   = [], {} 
     parser.getKeyRecursively( yaml_d, key_lis )
+    logObj.info(f"scanForSecrets - Retrieved {len(key_lis)} keys for scanning")
     '''
     if you are using `parser.getKeyRecursively` to get all keys , you need to do some trnasformation to get the key names 
     as the output is a list of tuples so, `[(k1, v1), (k2, v2), (k3, v3)]`
@@ -177,8 +182,12 @@ def scanForSecrets(yaml_d):
         keyList   = scanKeys( key_, value_list )
         # print(keyList)
         if( len(unameList) > 0  )  or ( len(passwList) > 0  ) or ( len(keyList) > 0  ) :
+            logObj.warning(f"Detected secrets for key: {key_} in file {yaml_d}")
             dic2ret_secret[key_] =  ( unameList, passwList, keyList ) 
+
     # print(dic2ret_secret)
+    logObj.info(f"scanForSecrets - Scan completed with {len(dic2ret_secret)} keys containing secrets")
+
     return dic2ret_secret
 
 
@@ -328,6 +337,9 @@ def scanSingleManifest( path_to_script ):
  
 
 def scanForMissingSecurityContext(path_scrpt):
+    logObj = myLogger.giveMeLoggingObject()
+    logObj.info(f"Scanning for missing securityContext in: {path_scrpt}")
+
     dic, lis   = {}, []
     if ( parser.checkIfValidK8SYaml( path_scrpt )  ): 
         cnt = 0 
@@ -364,6 +376,9 @@ def scanForMissingSecurityContext(path_scrpt):
                             location = Location(physical_location=PhysicalLocation(artifact_location=ArtifactLocation(uri=path_scrpt),region = Region(start_line =line)))
                             result.locations = [location]
                             run.results.append(result)
+                        logObj.warning(f"Absent securityContext in line {line_number} of file {path_scrpt}")
+
+    logObj.info(f"Scan completed with {len(dic)} missing securityContext results in: {path_scrpt}")
     # print(dic) 
     return dic 
 
@@ -495,6 +510,9 @@ def scanForRollingUpdates(path_script ):
 
 
 def scanForMissingNetworkPolicy(path_script ):
+    logObj = myLogger.giveMeLoggingObject()
+    logObj.info(f"Scanning network policy for: {path_script}")
+
     dic, lis   = {}, []
     if ( parser.checkIfValidK8SYaml( path_script )  ): 
         cnt = 0 
@@ -514,6 +532,9 @@ def scanForMissingNetworkPolicy(path_script ):
             #print (temp_ls)
             key_list = [ x_[0] for x_ in temp_ls  ]
             #print(key_list)
+
+            logObj.warning(f"Network policy missing in {path_script}, extracted keys: {key_list}")
+
             
             # specification is present the line number of the SARIF output should be the line number of the container spec 
             if (constants.SPEC_KW in key_list ):
@@ -523,6 +544,9 @@ def scanForMissingNetworkPolicy(path_script ):
                     location = Location(physical_location=PhysicalLocation(artifact_location=ArtifactLocation(uri=path_script),region = Region(start_line =line)))
                     result.locations = [location]
                     run.results.append(result)
+
+                logObj.warning(f"Network policy missing, reported at line {line_number} of file {path_script}")
+
             # if specification is not present the line number of the SARIF output is be the first line number
             else:
                 line = 1
@@ -530,6 +554,9 @@ def scanForMissingNetworkPolicy(path_script ):
                 location = Location(physical_location=PhysicalLocation(artifact_location=ArtifactLocation(uri=path_script),region = Region(start_line =line)))
                 result.locations = [location]
                 run.results.append(result)
+
+                logObj.warning(f"Specification key not found, defaulting to line 1 for SARIF output of file {path_script}")
+
             
             dic[ cnt ] = [ constants.NET_POLICY_KW ]
             if ( (constants.SPEC_KW in key_list ) and  (constants.POD_SELECTOR_KW in key_list) and  (constants.MATCH_LABEL_KW in key_list) ):
@@ -537,6 +564,8 @@ def scanForMissingNetworkPolicy(path_script ):
                     lis  = graphtaint.mineNetPolGraph(path_script, yaml_di, src_val, key_list )
             dic[ cnt ] = lis
     # print(dic) 
+    logObj.info(f"Network policy scan completed for {path_script} with result: {dic}")
+
     return dic  
 
 def scanForTruePID(path_script ):

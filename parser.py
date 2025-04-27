@@ -1,10 +1,13 @@
 '''
 Akond Rahman 
-April 30, 2021 
+April 30, 2021 /2025
 Parser to file YAML files
 '''
 import sys
-import ruamel.yaml 
+try:
+    import ruamel_yaml as ruamel
+except ModuleNotFoundError:
+    import ruamel.yaml as ruamel
 from ruamel.yaml.scanner import ScannerError
 import json
 #import jsonpath_rw as jp
@@ -14,6 +17,7 @@ import pathlib as pl
 import re
 import subprocess
 import os
+import myLogger
 
 #update basepath
 base_path = r" "
@@ -89,18 +93,29 @@ def getValuesRecursively(  dict_   ) :
     else: 
         yield dict_ 
 
-
 def checkIfValidK8SYaml(path2yaml):
+    logObj = myLogger.giveMeLoggingObject()
+    logObj.info(f"Validating K8S YAML file: {path2yaml}")
+
     val2ret   = False 
     dict_as_list = loadMultiYAML( path2yaml )
-    yaml_dict    = getSingleDict4MultiDocs( dict_as_list )        
+    yaml_dict    = getSingleDict4MultiDocs( dict_as_list ) 
+
+    logObj.info(f"Loaded YAML structure: {yaml_dict}")
+
     k_list       = []
     getKeyRecursively( yaml_dict, k_list )
+    
+    logObj.info(f"Keys extracted recursively: {k_list}")
+
     temp_ = []
     for k_ in k_list:
         temp_.append( k_[0]  )
     key_lis      = list( getValuesRecursively  ( yaml_dict ) )
-    if ( any(x_ in key_lis for x_ in constants.K8S_FORBIDDEN_KW_LIST ) ): 
+    if (any(x_ in key_lis for x_ in constants.K8S_FORBIDDEN_KW_LIST ) ): 
+        forbidden_keywords = [x_ for x_ in constants.K8S_FORBIDDEN_KW_LIST if x_ in key_lis]
+        logObj.warning(f"Forbidden keywords detected: {forbidden_keywords} in file {path2yaml}")
+
         val2ret = False 
     else: 
         if ( constants.API_V_KEYNAME in temp_ ) and (constants.KIND_KEY_NAME in temp_):
@@ -140,36 +155,51 @@ def readYAMLAsStr( path_script ):
 
 # This function checks whether our parser throws an exception for reading the YAML file. 
 def checkParseError( path_script ):
+    logObj = myLogger.giveMeLoggingObject()
     flag = True
+
+    # Forensic log: Starting function
+    logObj.info(f"Attempting to parse script: {path_script}")
+
     with open(path_script, constants.FILE_READ_FLAG) as yml:
-        yaml = ruamel.yaml.YAML()
+        yaml = ruamel.YAML()
         try:
             for dictionary in yaml.load_all(yml):
                 pass
-        except ruamel.yaml.parser.ParserError as parse_error:
+            logObj.info(f"Successfully parsed script: {path_script}")
+        except ruamel.parser.ParserError as parse_error:
             flag = False
+            logObj.error(f"ParserError encountered while parsing {path_script}: {str(parse_error)}")
+            logObj.info(constants.YAML_SKIPPING_TEXT)
             print(constants.YAML_SKIPPING_TEXT)           
-        except ruamel.yaml.error.YAMLError as exc:
+        except ruamel.error.YAMLError as exc:
             flag = False
+            logObj.error(f"YAMLError encountered while parsing {path_script}: {str(exc)}")
+            logObj.info(constants.YAML_SKIPPING_TEXT)
             print( constants.YAML_SKIPPING_TEXT  )    
         except UnicodeDecodeError as err_: 
             flag = False
+            logObj.error(f"UnicodeDecodeError encountered while parsing {path_script}: {str(err_)}")
+            logObj.info(constants.YAML_SKIPPING_TEXT)
             print( constants.YAML_SKIPPING_TEXT  )
+
+    logObj.info(f"Completed parsing script: {path_script} with success flag: {flag}")
+
     return flag
 
 def loadMultiYAML( script_ ):
     dicts2ret = []  
     with open(script_, constants.FILE_READ_FLAG  ) as yml_content :
-        yaml = ruamel.yaml.YAML()
+        yaml = ruamel.YAML()
         yaml.default_flow_style = False      
         try:
             for d_ in yaml.load_all(yml_content) :                
                 # print('='*25)
                 # print(d_)
                 dicts2ret.append( d_ )
-        except ruamel.yaml.parser.ParserError as parse_error:
+        except ruamel.parser.ParserError as parse_error:
             print(constants.YAML_SKIPPING_TEXT)           
-        except ruamel.yaml.error.YAMLError as exc:
+        except ruamel.error.YAMLError as exc:
             print( constants.YAML_SKIPPING_TEXT  )    
         except UnicodeDecodeError as err_: 
             print( constants.YAML_SKIPPING_TEXT  )
@@ -236,11 +266,11 @@ def find_json_path_keys(json_file, parent_path='', paths=None):
     """The following regular expressions are used to remove elements to construct a VALID json path"""
 
     # app.kubernetes.io/release --> "app.kubernetes.io/release"
-    regex_key_dot = re.compile("([^\s\.]+[.][\S]+)")
+    regex_key_dot = re.compile(r"([^\s\.]+[.][\S]+)")
     # app.kubernetes.io/release --> "app*kubernetes*io*release"
-    regex_special_character_removal = re.compile("[^A-Za-z0-9]+")
+    regex_special_character_removal = re.compile(r"[^A-Za-z0-9]+")
     #[3].metadata.name --> .metadata.name
-    regex_remove_initial_index = re.compile("^/?(\[)([0-9])+(\])")
+    regex_remove_initial_index = re.compile(r"^/?(\[)([0-9])+(\])")
     
     if paths is None:
         paths = []   
@@ -249,7 +279,7 @@ def find_json_path_keys(json_file, parent_path='', paths=None):
         
             """The following condition is used if there is any key: value mapping like jinja format sych as key: {{value}}. 
                This is a temporary fix to handle the case"""
-            if (isinstance(key,ruamel.yaml.comments.CommentedKeyMap) and value is None) or isinstance(key,int):
+            if (isinstance(key,ruamel.comments.CommentedKeyMap) and value is None) or isinstance(key,int):
                 pass
             else:
                 if regex_key_dot.match(key):              
@@ -299,7 +329,7 @@ Useful in MultiYaml file format but redundant in single yaml Need to merge with 
 
 def update_json_paths (paths):
     #[3].metadata.name --> .metadata.name
-    regex_remove_initial_index = re.compile("^/?(\[)([0-9])+(\])")
+    regex_remove_initial_index = re.compile(r"^/?(\[)([0-9])+(\])")
     json_path =[]
     updated_paths =[]
     remove = ''    
@@ -311,7 +341,7 @@ def update_json_paths (paths):
     return json_path
     
 
-def show_line_for_paths(  filepath, key): #key_jsonpath_mapping is a global dictionary
+def show_line_for_paths(filepath, key):  # key_js onpath_mapping is a global dictionary
     line_number = count_initial_comment_line(filepath)
     """
     input: provide  JSON_PATH dictionary and the key
@@ -320,10 +350,11 @@ def show_line_for_paths(  filepath, key): #key_jsonpath_mapping is a global dict
     env_PATH = r"C:\ProgramData\Chocolatey\bin"
     lines = []
     adjusted_lines = []
-    print("This is the mapping for the Key",key,"--->",key_jsonpath_mapping[key]) 
+    # print("This is the mapping for the Key",key,"--->",key_jsonpath_mapping[key])
     # for k in key_jsonpath_mapping:
     #     print("Key--->",k, "Value--->",key_jsonpath_mapping[k])
     if key_jsonpath_mapping.get(key) is not None:
+        print("This is the mapping for the Key", key, "--->", key_jsonpath_mapping[key])
         if isinstance(key_jsonpath_mapping[key], list):
             for i in key_jsonpath_mapping[key]:
                 #print(i)

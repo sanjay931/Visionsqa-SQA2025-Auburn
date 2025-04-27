@@ -3,11 +3,14 @@ Akond Rahman
 Sep 21, 2022
 Source Code to Run Tool on All Kubernetes Manifests  
 '''
+from pathlib import Path
 import scanner 
 import pandas as pd 
 import constants
-# comment for test 1
+import typer
+
 def getCountFromAnalysis(ls_):
+
     list2ret           = []
     for tup_ in ls_:
         within_sec_cnt = 0 
@@ -41,24 +44,26 @@ def getCountFromAnalysis(ls_):
         cap_module_dic = tup_[20]
         k8s_flag       = tup_[21]
         helm_flag      = tup_[22]
+        
 
         list2ret.append(  ( dir_name, script_name, within_sec_cnt, len(taint_secret), len(privilege_dic), len(http_dict), len(secuContextDic), len(nSpaceDict), len(absentResoDict), len(rollUpdateDic), len(netPolicyDict), len(pidfDict), len(ipcDict), len(dockersockDic), len(hostNetDict), len(cap_sys_dic), len(host_alias_dic), len(allow_priv_dic), len(unconfined_dic), len(cap_module_dic) , k8s_flag, helm_flag  )  )
+
     return list2ret
 
 
-def main(directory: Path = typer.Argument(..., exists=True, help="Absolute path to the folder than contains Kubernetes manifests"),
-         ):
+def main():
     """
     Run KubeSec in a Kubernetes directory and get results in a CSV file.
 
     """
-    content_as_ls, sarif_json   = scanner.runScanner( directory )
+    directory = "/home/TEST_ARTIFACTS/"
+    content_as_ls, sarif_json   = scanner.runScanner( Path(directory) )
     
     with open("SLIKUBE.sarif", "w") as f:
       f.write(sarif_json)
 
     df_all          = pd.DataFrame( getCountFromAnalysis( content_as_ls ) )
-    outfile = Path(directory, "slikube_results.csv")
+    outfile = Path("/home/slikube_results.csv")
 
     df_all.to_csv( outfile, header= constants.CSV_HEADER , index=False, encoding= constants.CSV_ENCODING )
 
@@ -68,7 +73,7 @@ if __name__ == '__main__':
     '''
     DO NOT DELETE ALL IN K8S_REPOS AS TAINT TRACKING RELIES ON BASH SCRIPTS, ONE OF THE STRENGTHS OF THE TOOL 
     '''
-    # ORG_DIR         = '/Users/arahman/K8S_REPOS/GITHUB_REPOS/'
+    ORG_DIR = '/home/TEST_ARTIFACTS'
     # OUTPUT_FILE_CSV = '/Users/arahman/Documents/OneDriveWingUp/OneDrive-TennesseeTechUniversity/Research/Kubernetes/StaticTaint/data/V16_GITHUB_OUTPUT.csv'
 
     # ORG_DIR         = '/Users/arahman/K8S_REPOS/GITLAB_REPOS/'

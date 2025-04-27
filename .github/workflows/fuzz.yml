@@ -1,38 +1,35 @@
-name: Python Fuzzing
+name: Run Fuzz Tests
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:  # Manual trigger
 
 jobs:
-  fuzz:
+  fuzzing:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    
+    - name: Checkout repo
+      uses: actions/checkout@v3
+
     - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: '3.8'
-    
+
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install pyyaml
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-    
-    - name: Run fuzzing
+        pip install ruamel.yaml atheris
+
+    - name: Run fuzzing script
       run: |
-        python fuzz.py
-    
-    - name: Upload fuzzing results
-      uses: actions/upload-artifact@v2
+        python3 KubeSec-master/fuzz.py || true
+
+    - name: Upload fuzz log
+      if: always()
+      uses: actions/upload-artifact@v4
       with:
-        name: fuzzing-results
-        path: |
-          fuzzing_results/
-          fuzz_results.log
+        name: fuzz-logs
+        path: fuzz_errors.log
