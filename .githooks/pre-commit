@@ -1,0 +1,25 @@
+#!/bin/sh
+#
+# Git pre-commit hook to run Docker commands
+# Ensure this script is executable: chmod +x .git/hooks/pre-commit
+
+# Redirect output to stderr
+exec 1>&2
+
+# Get the Git repository root directory
+REPO_ROOT=$(git rev-parse --show-toplevel)
+echo "$REPO_ROOT"
+
+# Stop commit if any Docker command fails
+set -e
+
+echo "Building Docker image 'slikube'..."
+docker build -t slikube "$REPO_ROOT/"
+
+# echo "Running container interactively..."
+# docker run -it docker.io/library/slikube
+
+echo "Running container with volume mount to Git repo root..."
+docker run --rm -v  "${REPO_ROOT}/output:/results" docker.io/library/slikube
+
+echo "Pre-commit hook completed successfully!"
