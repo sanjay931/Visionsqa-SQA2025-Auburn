@@ -14,15 +14,19 @@ fi
 # Directory for reports
 mkdir -p security_reports
 
+# Create timestamp for unique report naming
+timestamp=$(date +%Y%m%d_%H%M%S)
+
 # Install bandit if not already installed
 pip3 install bandit > /dev/null 2>&1
 
 # Run Bandit (a Python security linter) on changed files
 echo "Running bandit security analysis..."
-/opt/homebrew/bin/bandit -r $FILES -f csv -o security_reports/security_weakness_report.csv
+# Run Bandit with more verbose output
+bandit -r $FILES -f csv -o security_reports/security_weakness_report_${timestamp}.csv
 
 # Add the report to git
-git add security_reports/security_weakness_report.csv
+git add security_reports/security_weakness_report_${timestamp}.csv
 
-echo "Security analysis completed. Report saved to security_reports/security_weakness_report.csv"
+echo "Security analysis completed. Report saved to security_reports/security_weakness_report_${timestamp}.csv"
 exit 0
