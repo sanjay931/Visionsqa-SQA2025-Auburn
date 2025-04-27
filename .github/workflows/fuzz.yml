@@ -25,7 +25,7 @@ jobs:
 
     - name: Run fuzzing script
       run: |
-        python3 KubeSec-master/fuzz.py || true
+        python3 fuzz.py || true
 
     - name: Upload fuzz log
       if: always()
