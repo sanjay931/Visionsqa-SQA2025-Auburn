@@ -1,14 +1,17 @@
-name: Run Fuzz Tests
+name: Enhanced Fuzzing Tests
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  schedule:
+    - cron: '0 0 * * 0'  # Run weekly on Sundays
 
 jobs:
   fuzzing:
     runs-on: ubuntu-latest
+    timeout-minutes: 60  # Add a timeout for the entire job
 
     steps:
     - name: Checkout repo
@@ -17,19 +20,53 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.8'
+        python-version: '3.10'  # Updated to newer Python version
 
     - name: Install dependencies
       run: |
-        pip install ruamel.yaml atheris
+        python -m pip install --upgrade pip
+        pip install atheris pyyaml ruamel.yaml coverage pytest
+
+    - name: Create directories
+      run: |
+        mkdir -p fuzz_corpus
+        touch fuzz_errors.log
+
+    - name: Cache fuzzing corpus
+      uses: actions/cache@v3
+      with:
+        path: fuzz_corpus
+        key: ${{ runner.os }}-fuzz-corpus-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-fuzz-corpus-
 
     - name: Run fuzzing script
       run: |
-        python3 fuzz.py || true
+        # Set environment variables for the fuzzer
+        export FUZZ_ITERATIONS=50000  # Reduced for CI environment
+        export MAX_EXECUTION_TIME=30  # Shorter timeout for CI
+        
+        # Run the fuzzer with a time limit
+        timeout 45m python3 fuzz.py || true
 
-    - name: Upload fuzz log
+    - name: Run coverage report
+      run: |
+        coverage report -m
+        coverage xml
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        fail_ci_if_error: false
+
+    - name: Upload fuzz artifacts
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: fuzz-logs
-        path: fuzz_errors.log
+        name: fuzz-results
+        path: |
+          fuzz_errors.log
+          fuzz_stats.json
+          fuzz_corpus/
+        if-no-files-found: warn
