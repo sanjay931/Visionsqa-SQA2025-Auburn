@@ -1,86 +1,401 @@
- Task 4.c - Forensics Integration
+## CI/CD Pipeline
 
- Overview
-We integrated forensics capabilities into 5 key methods of the KubeSec project to enhance security analysis with detailed audit trails and execution tracking.
- Methods Modified with Forensics
+VisionSQA implements a comprehensive CI/CD pipeline using GitHub Actions and pre-commit hooks to ensure code quality and security at every stage of development.
 
-1. **main()** in main.py
-   - The entry point for the application
-   - Forensics track the overall execution flow, including input directories and results
+### GitHub Workflow (fuzz.yml)
 
-2. **scanSingleManifest()** in scanner.py
-   - Core function for analyzing Kubernetes manifests
-   - Forensics capture detected security issues and manifest processing details
+The project uses a GitHub workflow defined in `.github/workflows/fuzz.yml` that automatically runs security and quality checks:
 
-3. **scanForOverPrivileges()** in scanner.py
-   - Specialized function for detecting privilege escalation risks
-   - Forensics log privilege-related security findings
+```yaml
+name: Enhanced Fuzzing Tests
 
-4. **mineSecretGraph()** in graphtaint.py
-   - Function for tracking secret propagation through configuration files
-   - Forensics track secret detection and taint analysis
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * 0'  # Run weekly on Sundays
 
-5. **loadMultiYAML()** in parser.py
-   - Critical function for parsing Kubernetes YAML files
-   - Forensics log file loading operations and parsing errors
+jobs:
+  fuzzing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
 
- Implementation Details
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
 
- Forensics Decorator
-We implemented a `forensics_decorator` that:
-- Captures method entry with timestamp and parameters
-- Records call stack information
-- Logs method exit with execution time
-- Captures return values
-- Handles exceptions with detailed error information
-- Creates structured logs in both text and JSON formats
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
- Logging Infrastructure
-- **Log Files**: Generated in the `forensics_logs` directory
-- **Text Logs**: Human-readable logs in `forensics.log`
-- **JSON Logs**: Machine-parsable structured logs in `forensics.json`
-- **Log Content**: Each log entry includes timestamp, execution ID, method name, parameters, and execution results
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install atheris pyyaml ruamel.yaml
 
- Error Handling
-We enhanced error handling for missing dependencies:
-- Graceful handling of missing `yq` command
-- Default line number assignment when line information cannot be determined
-- Exception capture with detailed context
+    - name: Create directories
+      run: |
+        mkdir -p fuzz_corpus
+        touch fuzz_errors.log
 
- How to Access Forensics Data
+    - name: Cache fuzzing corpus
+      uses: actions/cache@v3
+      with:
+        path: fuzz_corpus
+        key: ${{ runner.os }}-fuzz-corpus-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-fuzz-corpus-
 
-1. Run the KubeSec application
-2. Check the `forensics_logs` directory for log files
-3. Analyze `forensics.log` for human-readable logs
-4. Process `forensics.json` for automated analysis
+    - name: Run fuzzing script
+      run: |
+        export FUZZ_ITERATIONS=50000
+        export MAX_EXECUTION_TIME=30
+        
+        timeout 45m python3 fuzz.py || true
 
- Benefits
+    - name: Upload fuzz artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: fuzz-results
+        path: |
+          fuzz_errors.log
+          fuzz_stats.json
+          fuzz_corpus/
+        if-no-files-found: warn
+```
 
-- **Enhanced Debugging**: Detailed execution tracking makes troubleshooting easier- **Security Audit Trail**: Complete record of security checks and findings
-- **Performance Monitoring**: Execution time tracking identifies bottlenecks
-- **Error Identification**: Comprehensive exception logging aids in resolving issues
-- **Execution Transparency**: Clear visibility into the analysis process
+#### How the Workflow is Triggered
 
-This forensics implementation significantly enhances the security analysis capabilities of KubeSec by providing a comprehensive audit trail and detailed visibility into the scanning process.
----
+The GitHub workflow is automatically triggered by:
 
- 4.a Git Hook for Bandit Security Scanning 
+1. **Push Events**: Any push to the `main` branch
+2. **Pull Requests**: Any pull request targeting the `main` branch
+3. **Scheduled Runs**: Weekly runs on Sundays to ensure continuous testing
 
- Applied Technique
-We implemented a **Git pre-commit hook** that automatically performs a **static security analysis** of staged Python files using [Bandit](https://bandit.readthedocs.io/en/latest/).
+#### What the Workflow Does
 
-The hook executes every time a `.py` file is committed and generates a CSV report (`bandit_report.csv`) containing security warnings such as:
-- Use of `eval()`
-- Hardcoded passwords
-- Insecure system calls
-- Unsafe imports
+1. Sets up the Python environment
+2. Installs necessary dependencies
+3. Configures the fuzzing environment
+4. Runs the fuzzing script with a time limit
+5. Uploads fuzzing results as artifacts for review
+6. Caches the fuzzing corpus for future runs
 
- Hook Implementation Summary
-- Initially attempted to use Docker-based Bandit images (e.g., `ghcr.io`, `banditsec/bandit`) — failed due to login/auth issues and broken entrypoints.
-- Final working solution used local Bandit installation via `pip install bandit`.
-- Hook script creates `.bandit_temp` folder, scans it with Bandit, and saves results in `bandit_report.csv`.
+### Pre-commit Hooks Integration
 
- Example Output
-```csv
-filename,test_name,test_id,issue_severity,issue_text
-.bandit_temp/test.py,blacklist_calls,B307,HIGH,Use of eval detected.
+Pre-commit hooks work alongside the GitHub workflow to ensure code quality before code is even committed:
+
+#### Pre-commit Hook Workflow
+
+1. When you run `git commit`, the pre-commit hook in `.git/hooks/pre-commit` is automatically executed
+2. The hook runs a series of checks on your code:
+   - Code formatting checks
+   - Static code analysis
+   - Security scans
+   - Custom VisionSQA checks
+3. If any check fails, the commit is blocked, and you must fix the issues
+4. Once all checks pass, the commit proceeds normally
+
+#### Integration with CI/CD
+
+The pre-commit hooks act as the first line of defense in the CI/CD pipeline:
+
+```
+Developer Workflow:
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│                 │    │                 │    │                 │    │                 │
+│  Code Changes   │───▶│  Pre-commit     │───▶│  GitHub         │───▶│  Review &       │
+│                 │    │  Hooks          │    │  Workflow       │    │  Deployment     │
+│                 │    │                 │    │                 │    │                 │
+└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+#### Adding Custom Checks
+
+You can modify the pre-commit hook to add custom checks by editing the `.githooks/pre-commit` file before running `./install-hooks.sh`:
+
+```bash
+# Example of adding a custom check to the pre-commit hook
+echo '#!/bin/bash
+
+# Run standard linting
+flake8 .
+
+# Run custom VisionSQA check
+python slikube.py --self-check
+
+# Exit with error if any check failed
+if [ $? -ne 0 ]; then
+  echo "Pre-commit checks failed!"
+  exit 1
+fi' > .githooks/pre-commit
+
+# Install the updated hook
+./install-hooks.sh
+```
+
+### Complete Pipeline Flow
+
+The complete CI/CD pipeline works as follows:
+
+1. **Local Development**:
+   - Developer makes code changes
+   - Pre-commit hooks run automatically when committing
+   - Immediate feedback on code quality issues
+
+2. **GitHub Integration**:
+   - Code is pushed to GitHub
+   - GitHub workflow (fuzz.yml) is triggered
+   - Fuzzing tests run in the GitHub Actions environment
+   - Results are stored as artifacts
+
+3. **Continuous Monitoring**:
+   - Weekly scheduled runs catch regressions
+   - Cached corpus builds up over time, improving test coverage
+   - Artifacts provide historical data for trend analysis
+
+This integrated approach ensures that code quality and security are maintained throughout the development lifecycle, with multiple layers of protection against potential issues.# VisionSQA - Security, Quality, and Forensics Assessment Tool
+
+VisionSQA is a comprehensive security, quality, and forensics assessment tool specifically designed for Kubernetes environments. It helps identify misconfigurations, vulnerabilities, quality issues, and provides forensic capabilities for your Kubernetes YAML files.
+
+[![Run Fuzz Tests](https://github.com/sanjay931/Visionsqa-SQA2025-Auburn/actions/workflows/fuzz.yml/badge.svg)](https://github.com/sanjay931/Visionsqa-SQA2025-Auburn/actions/workflows/fuzz.yml)
+
+## Features
+
+- Static analysis of Kubernetes YAML files
+- Detection of common security misconfigurations
+- Quality assessment for Kubernetes resources
+- JSON/YAML parsing and validation
+- Fuzzing capability for robust testing
+- Forensic analysis for incident investigation
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Usage](#usage)
+- [Docker](#docker)
+- [Pre-commit Hooks](#pre-commit-hooks)
+- [Fuzzing](#fuzzing)
+- [Forensics](#forensics)
+- [CI/CD Pipeline](#cicd-pipeline)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Installation
+
+### Prerequisites
+
+- Python 3.8+
+- Docker (optional, for containerized usage)
+- Git (for pre-commit hooks)
+
+### Basic Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/sanjay931/Visionsqa-SQA2025-Auburn.git
+cd Visionsqa-SQA2025-Auburn
+
+# Create a virtual environment (recommended)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+## Usage
+
+```bash
+# Basic usage
+python slikube.py -i <path-to-your-kubernetes-yaml>
+
+# Help
+python slikube.py --help
+```
+
+## Docker
+
+Using VisionSQA with Docker is the recommended way to ensure consistent behavior across different environments.
+
+### Building the Docker Image
+
+```bash
+# Build the Docker image
+docker build -t slikube .
+```
+
+### Running VisionSQA in Docker
+
+```bash
+# Run VisionSQA with Docker, mounting the output directory
+docker run --rm -v "$(pwd)/output:/results" docker.io/library/slikube
+```
+
+### Custom Flags with Docker
+
+```bash
+# Example of running with custom flags
+docker run --rm -v "$(pwd)/output:/results" -v "$(pwd)/your-yamls:/input" docker.io/library/slikube -i /input
+
+# Run forensic analysis with Docker
+docker run --rm -v "$(pwd)/output:/results" -v "$(pwd)/your-yamls:/input" docker.io/library/slikube -f -i /input
+```
+
+## Pre-commit Hooks
+
+VisionSQA provides pre-commit hooks to ensure your code meets quality standards before commits.
+
+### Installing Pre-commit Hooks
+
+```bash
+# Make the install script executable (if needed)
+chmod +x install-hooks.sh
+
+# On macOS, you might need to remove quarantine attribute
+xattr -d com.apple.quarantine install-hooks.sh
+
+# Install the pre-commit hooks
+./install-hooks.sh
+
+# Ensure the pre-commit hook is executable
+chmod +x .git/hooks/pre-commit
+```
+
+### Troubleshooting Pre-commit Hooks
+
+If you're having issues with pre-commit hooks:
+
+```bash
+# Make sure the pre-commit hook is executable
+chmod +x .git/hooks/pre-commit
+
+# On macOS, you might need to remove quarantine attribute
+xattr -d com.apple.quarantine .git/hooks/pre-commit
+```
+
+## Fuzzing
+
+VisionSQA includes a comprehensive fuzzing framework to ensure the robustness of its parsing and analysis functions.
+
+### Installing Fuzzing Dependencies
+
+```bash
+# Install Atheris for fuzzing
+pip install atheris
+
+# Alternative installation method using pipx
+brew install pipx  # On macOS
+pipx install atheris
+```
+
+### Running the Fuzzer
+
+```bash
+# Basic fuzzing run
+python fuzz.py
+
+# Run with specific iterations
+FUZZ_ITERATIONS=100000 python fuzz.py
+
+# Run with a different timeout value (in seconds)
+MAX_EXECUTION_TIME=60 python fuzz.py
+```
+
+### Fuzzing Results
+
+Fuzzing results are stored in the following files:
+
+- `fuzz_errors.log`: Detailed log of all errors encountered during fuzzing
+- `fuzz_stats.json`: Statistics about the fuzzing run
+- `fuzz_corpus/`: Directory containing interesting inputs that triggered bugs
+
+### CI/CD Integration
+
+The GitHub workflow automatically runs fuzzing tests on every push and pull request to the main branch. You can view the results in the GitHub Actions tab.
+
+## Forensics
+
+VisionSQA includes powerful forensics capabilities to help investigate security incidents and compliance violations in Kubernetes environments.
+
+### Running Forensic Analysis
+
+```bash
+# Basic forensic analysis
+python slikube.py -f -i <path-to-your-kubernetes-yaml>
+
+# Generate detailed forensic report
+python slikube.py -f --report-format=full -i <path-to-your-kubernetes-yaml>
+
+# Extract specific forensic artifacts
+python slikube.py -f --extract-artifacts -i <path-to-your-kubernetes-yaml>
+```
+
+### Forensic Capabilities
+
+- **Historical Analysis**: Examine changes to Kubernetes resources over time
+- **Incident Response**: Identify potential breach indicators and vulnerable configurations
+- **Compliance Verification**: Validate resources against compliance frameworks (CIS, NIST, PCI-DSS)
+- **Artifact Extraction**: Extract and preserve key artifacts for further investigation
+- **Chain of Custody**: Maintain proper forensic documentation for findings
+
+### Forensic Reports
+
+Forensic reports are generated in the `output/forensics/` directory and include:
+
+- `summary_report.json`: Overview of key findings
+- `detailed_analysis.json`: In-depth analysis of each resource
+- `compliance_report.json`: Compliance status for relevant frameworks
+- `artifacts/`: Directory containing extracted forensic artifacts
+- `timeline.json`: Chronological sequence of events (if available)
+
+## Development
+
+### Project Structure
+
+```
+.
+├── slikube.py              # Main application
+├── parser.py               # YAML/JSON parsing utilities
+├── fuzz.py                 # Fuzzing framework
+├── forensics/              # Forensics analysis modules
+│   ├── analyzer.py         # Core forensics functionality
+│   ├── artifacts.py        # Artifact extraction utilities
+│   └── report.py           # Report generation utilities
+├── requirements.txt        # Python dependencies
+├── Dockerfile              # Docker configuration
+├── install-hooks.sh        # Pre-commit hook installer
+├── .githooks/              # Git hooks templates
+│   └── pre-commit          # Pre-commit hook template
+├── .github/workflows/      # GitHub Actions workflows
+│   └── fuzz.yml            # Fuzzing workflow configuration
+└── output/                 # Default output directory
+    ├── reports/            # Analysis reports
+    └── forensics/          # Forensic analysis results
+```
+
+### Adding New Features
+
+1. Create a new branch for your feature
+2. Implement your changes
+3. Add tests (including fuzz tests if appropriate)
+4. Submit a pull request
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
